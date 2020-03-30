@@ -44,9 +44,9 @@ acao = wb.DataReader(args['ativo'], data_source='yahoo', start='2019-2-11')
 
 if (args["opcao"] == 1):
     tr = trs(acao)
-    print(' - {}% ao ano\n - {}% ao dia'.format(tr[0], tr[1]))
+    print(' > {}% ao ano\n > {}% ao dia'.format(tr[0], tr[1]))
 elif (args["opcao"] == 2):
     tr = trl(acao)
-    print(' - {}% ao ano\n - {}% ao dia'.format(tr[0], tr[1]))
+    print(' > {}% ao ano\n > {}% ao dia'.format(tr[0], tr[1]))
 else:
     print("Digite uma opcao valida!")
