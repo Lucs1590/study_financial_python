@@ -40,7 +40,7 @@ ap.add_argument("-o", "--opcao", type=int, required=True,
                 help="Opções:\n 1-Taxa de retorno simples\n 2-Taxa de retorno logaritimaca")
 args = vars(ap.parse_args())
 
-acao = wb.DataReader(args['ativo'], data_source='yahoo', start='2019-2-11')
+acao = wb.DataReader(args['ativo'], data_source='yahoo', start='2020-3-11')
 
 if (args["opcao"] == 1):
     tr = trs(acao)
