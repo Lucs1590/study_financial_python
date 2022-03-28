@@ -1,7 +1,7 @@
 import argparse
 import numpy as np
-from pandas_datareader import data as wb
 import matplotlib.pyplot as plt
+from pandas_datareader import data as wb
 
 
 def trs(_active):
@@ -34,7 +34,7 @@ def to_br_date(data) -> str:
 
 
 ap = argparse.ArgumentParser()
-ap.add_argument("-a", "--ative", required=True, help="Sequence")
+ap.add_argument("-a", "--active", required=True, help="Sequence")
 ap.add_argument("-o", "--option", type=int, required=True,
                 help="Options:\n 1-Simple Return Rate\n 2-Logarithmic Return Rate")
 args = vars(ap.parse_args())
