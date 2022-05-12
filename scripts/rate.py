@@ -39,13 +39,13 @@ ap.add_argument("-o", "--option", type=int, required=True,
                 help="Options:\n 1-Simple Return Rate\n 2-Logarithmic Return Rate")
 args = vars(ap.parse_args())
 
-active = wb.DataReader(args['ativo'], data_source='yahoo', start='2020-3-11')
+active = wb.DataReader(args['active'], data_source='yahoo', start='2021-1-10')
 
-if args["option"] == 1:
+if args['option'] == 1:
     tr = trs(active)
     print(f' > {tr[0]}% by year\n > {tr[1]}% by day')
-elif args["option"] == 2:
+elif args['option'] == 2:
     tr = trl(active)
     print(f' > {tr[0]}% by year\n > {tr[1]}% by day')
 else:
-    print("Try to digite a valid option, in this case, 1 or 2")
+    print('Try to digite a valid option, in this case, 1 or 2')
