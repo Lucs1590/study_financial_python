@@ -116,7 +116,9 @@ def main():
     )
 
     # --- Portfolio Analysis ---
-    weights = np.full(len(tickers), 1 / len(tickers))  # Equal weights
+    # weights = np.full(len(tickers), 1 / len(tickers))  # Equal weights
+    weights = df_contributions.set_index("ticker")["amount"] / df_contributions["amount"].sum()
+    weights = weights.groupby("ticker").sum().reindex(tickers).fillna(0).values
     portfolio_var, portfolio_volatility, diversifiable_risk = calculate_portfolio_metrics(
         returns,
         weights
