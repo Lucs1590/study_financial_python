@@ -1,3 +1,4 @@
+from time import sleep
 from datetime import datetime
 from typing import List, Tuple
 
@@ -28,9 +29,10 @@ def remove_sold_assets(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def download_data(tickers: List[str], start_date: str, end_date: datetime) -> pd.DataFrame:
-    """Downloads adjusted close prices for the given tickers and date range."""
-    data = yf.download(tickers, start=start_date, end=end_date)["Adj Close"]
+def download_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
+    """Downloads adjusted close prices for a given ticker and date range."""
+    sleep(1)
+    data = yf.download(ticker, start=start_date, end=end_date)["Adj Close"]
     return data
 
 
@@ -48,8 +50,8 @@ def calculate_annualized_statistics(
     mean_returns = returns.mean() * 250
     std_returns = returns.std() * np.sqrt(250)
     for ticker in returns.columns:
-        skew_returns[ticker] = skew(returns[ticker].tolist())
-        kurt_returns[ticker] = kurtosis(returns[ticker].tolist())
+        skew_returns[ticker] = skew(returns[ticker].dropna())
+        kurt_returns[ticker] = kurtosis(returns[ticker].dropna())
 
     return mean_returns, std_returns, skew_returns, kurt_returns
 
@@ -101,15 +103,22 @@ def main():
         lambda x: f'{x}.SA'
     )
 
-    start_date = df_contributions["date"].min().strftime("%Y-%m-%d")
-    end_date = df_contributions["date"].max().strftime("%Y-%m-%d")
-
     df_contributions = remove_sold_assets(df_contributions)
     tickers = df_contributions["ticker"].unique().tolist()
 
-    data = download_data(tickers, start_date, end_date)
-    returns = calculate_log_returns(data)
-    data.to_csv("data/historical_data.csv")
+    all_data = pd.DataFrame()
+
+    for ticker in tickers:
+        ticker_data = df_contributions[df_contributions["ticker"] == ticker]
+        start_date = ticker_data["date"].min().strftime("%Y-%m-%d")
+        end_date = datetime.now().strftime("%Y-%m-%d")
+
+        data = download_data(ticker, start_date, end_date)
+        data.name = ticker
+        all_data = pd.merge(all_data, data, left_index=True, right_index=True, how="outer")
+
+    returns = calculate_log_returns(all_data)
+    returns.to_csv("data/historical_data.csv")
 
     mean_returns, std_returns, skew_returns, kurt_returns = calculate_annualized_statistics(
         returns
@@ -117,7 +126,8 @@ def main():
 
     # --- Portfolio Analysis ---
     # weights = np.full(len(tickers), 1 / len(tickers))  # Equal weights
-    weights = df_contributions.set_index("ticker")["amount"] / df_contributions["amount"].sum()
+    weights = df_contributions.set_index(
+        "ticker")["amount"] / df_contributions["amount"].sum()
     weights = weights.groupby("ticker").sum().reindex(tickers).fillna(0).values
     portfolio_var, portfolio_volatility, diversifiable_risk = calculate_portfolio_metrics(
         returns,
@@ -152,14 +162,12 @@ def main():
     print("Note: Values are annualized.")
 
     # --- Save statistics to CSV ---
-    stats = pd.DataFrame(
-        {
-            "Mean Annual Return": mean_returns,
-            "Annual Volatility": std_returns,
-            "Skewness": skew_returns,
-            "Kurtosis": kurt_returns,
-        }
-    )
+    stats = pd.DataFrame({
+        "Mean Annual Return": mean_returns,
+        "Annual Volatility": std_returns,
+        "Skewness": skew_returns,
+        "Kurtosis": kurt_returns,
+    })
     stats.to_csv(
         f"data/asset_statistics_{datetime.now().strftime('%Y%m%d-%H%M%S')}.csv"
     )
