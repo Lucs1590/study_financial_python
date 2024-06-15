@@ -1,119 +1,133 @@
 from datetime import datetime
+from typing import List, Tuple
+
 import numpy as np
 import pandas as pd
 import yfinance as yf
 
+from scipy.stats import skew, kurtosis
 
-def download_data(tickers, start_date, end_date):
-    """
-    Download adjusted close prices for the given tickers and date range.
-    """
-    data = yf.download(tickers, start=start_date, end=end_date)['Adj Close']
+
+def download_data(tickers: List[str], start_date: str, end_date: datetime) -> pd.DataFrame:
+    """Downloads adjusted close prices for the given tickers and date range."""
+    data = yf.download(tickers, start=start_date, end=end_date)["Adj Close"]
     return data
 
 
-def calculate_returns(data):
-    """
-    Calculate log returns from the adjusted close prices.
-    """
-    returns = np.log(data / data.shift(1))
-    return returns
+def calculate_log_returns(data: pd.DataFrame) -> pd.DataFrame:
+    """Calculates log returns from adjusted close prices."""
+    return np.log(data / data.shift(1))
 
 
-def calculate_statistics(returns):
-    """
-    Calculate mean, standard deviation, and other statistics from returns.
-    """
-    mean_returns = returns.mean()
-    std_returns = returns.std()
-    mean_annual_returns = mean_returns * 250
-    std_annual_returns = std_returns * np.sqrt(250)
-    return mean_returns, std_returns, mean_annual_returns, std_annual_returns
+def calculate_annualized_statistics(
+    returns: pd.DataFrame,
+) -> Tuple[pd.Series, pd.Series, pd.Series, pd.Series]:
+    """Calculates annualized mean, standard deviation, skewness and kurtosis from daily returns."""
+    skew_returns = {}
+    kurt_returns = {}
+    mean_returns = returns.mean() * 250
+    std_returns = returns.std() * np.sqrt(250)
+    for ticker in returns.columns:
+        skew_returns[ticker] = skew(returns[ticker].tolist())
+        kurt_returns[ticker] = kurtosis(returns[ticker].tolist())
+
+    return mean_returns, std_returns, skew_returns, kurt_returns
 
 
-def calculate_portfolio_metrics(returns, weights):
-    """
-    Calculate portfolio variance and volatility.
-    """
+def calculate_portfolio_metrics(
+    returns: pd.DataFrame, weights: np.ndarray
+) -> Tuple[float, float, float]:
+    """Calculates portfolio variance, volatility, and diversifiable risk."""
     cov_matrix = returns.cov() * 250
-    pfolio_var = np.dot(weights.T, np.dot(cov_matrix, weights))
-    pfolio_volatility = np.sqrt(pfolio_var)
-    return pfolio_var, pfolio_volatility
+    portfolio_var = np.dot(weights.T, np.dot(cov_matrix, weights))
+    portfolio_volatility = np.sqrt(portfolio_var)
 
-
-def calculate_diversifiable_risk(returns, weights):
-    """
-    Calculate diversifiable risk of the portfolio.
-    """
+    # Diversifiable risk (assuming equal weighting)
     asset_variances = returns.var() * 250
     diversifiable_risk = np.dot(weights**2, asset_variances)
-    return diversifiable_risk
+    return portfolio_var, portfolio_volatility, diversifiable_risk
+
+
+def print_asset_statistics(tickers, mean_returns, std_returns, skew_returns, kurt_returns):
+    """Prints the statistics of each asset"""
+    for ticker in tickers:
+        print(f"\n{ticker} Statistics:")
+        print(f"  - Mean Annual Return: {mean_returns[ticker]:.2%}")
+        print(f"  - Annual Volatility: {std_returns[ticker]:.2%}")
+        print(f"  - Skewness: {skew_returns[ticker]:.4f}")
+        print(f"  - Kurtosis: {kurt_returns[ticker]:.4f}")
+
+
+def print_portfolio_statistics(
+    portfolio_return, portfolio_volatility, sharpe_ratio, portfolio_var
+):
+    """Prints portfolio performance metrics."""
+    print("\nPortfolio Performance:")
+    print(f"  - Annual Return: {portfolio_return:.2%}")
+    print(f"  - Annual Volatility: {portfolio_volatility:.2%}")
+    print(f"  - Variance: {portfolio_var:.4f}")
+    print(f"  - Sharpe Ratio: {sharpe_ratio:.2f}")
 
 
 def main():
-    # Define tickers and date range
-    tickers = ['VGIR11.SA', 'BTCI11.SA', 'RURA11.SA', 'MXRF11.SA', 'GALG11.SA']
-    start_date = '2023-06-01'
+    # --- Defining parameters and downloading data ---
+    tickers = ["VGIR11.SA", "BTCI11.SA", "RURA11.SA", "MXRF11.SA", "GALG11.SA"]
+    start_date = "2023-06-01"
     end_date = datetime.now()
 
-    # Download data
     data = download_data(tickers, start_date, end_date)
+    returns = calculate_log_returns(data)
+    data.to_csv("historical_data.csv")
 
-    # Calculate returns
-    returns = calculate_returns(data)
-
-    # Calculate statistics
-    mean_returns, std_returns, mean_annual_returns, std_annual_returns = calculate_statistics(
+    mean_returns, std_returns, skew_returns, kurt_returns = calculate_annualized_statistics(
         returns
     )
 
-    # Print statistics
-    for ticker in tickers:
-        print(f'{ticker} mean: {mean_returns[ticker] * 100}')
-        print(f'{ticker} mean annual: {mean_annual_returns[ticker] * 100}')
-        print(f'{ticker} std: {std_returns[ticker] * 100}')
-        print(f'{ticker} std annual: {std_annual_returns[ticker]}\n')
-
-    # Calculate portfolio metrics
-    # Equal weighting scheme dinamically
-    weights = np.full(len(tickers), 1 / len(tickers))
-    pfolio_var, pfolio_volatility = calculate_portfolio_metrics(
-        returns, weights)
-    print(f'Portfolio Variance: {pfolio_var * 100}')
-    print(f'Portfolio Volatility: {pfolio_volatility * 100}')
-
-    # Calculate diversifiable risk
-    diversifiable_risk = calculate_diversifiable_risk(returns, weights)
-    print(f'Diversifiable Risk: {diversifiable_risk * 100}')
-    if diversifiable_risk > 0:
-        non_diversifiable_risk = pfolio_var - diversifiable_risk
-        print(f'Non-Diversifiable Risk: {non_diversifiable_risk * 100}')
-
-    portfolio_return = np.dot(weights, mean_annual_returns)
-    print(f'Portfolio Return: {portfolio_return * 100} (annual)')
-    print(f'Portfolio Return: {portfolio_return * 100 / 12} (monthly)')
-    print(
-        f'Portfolio Sharpe Ratio: {portfolio_return / pfolio_volatility}' if pfolio_volatility != 0 else 'Infinity'
+    # --- Portfolio Analysis ---
+    weights = np.full(len(tickers), 1 / len(tickers))  # Equal weights
+    portfolio_var, portfolio_volatility, diversifiable_risk = calculate_portfolio_metrics(
+        returns,
+        weights
     )
 
-    print("""\n - If the diversifiable risk is greater than zero it means that the portfolio is not well diversified.
-    In this case, the non-diversifiable risk is also calculated, which is the risk that cannot be diversified away.""")
-    print(""" - If the diversifiable risk is zero, it means that the portfolio is well diversified and the non-diversifiable risk is equal to the portfolio variance.""")
-    print(""" - The variance of the portfolio represents the total risk of the portfolio, which is the sum of the diversifiable and non-diversifiable risk.""")
-    print(""" - The volatility of the portfolio is the standard deviation of the portfolio returns, which is a measure of the total risk of the portfolio.""")
-    print(""" - The Sharpe ratio is a measure of the risk-adjusted return of the portfolio, which is the portfolio return divided by the portfolio volatility.
-    If the sharpe ratio is greater, it means that the portfolio is generating more return for the risk taken. If it is lower, it means that the portfolio is generating less return for the risk taken.""")
+    portfolio_return = np.dot(weights, mean_returns)
+    sharpe_ratio = portfolio_return / portfolio_volatility if portfolio_volatility != 0 else float(
+        "inf"
+    )
+    non_diversifiable_risk = portfolio_var - diversifiable_risk
 
-    # Save data to a CSV file with the metrics
-    metrics = pd.DataFrame({
-        'Mean': mean_returns,
-        'Mean Annual': mean_annual_returns,
-        'Std': std_returns,
-        'Std Annual': std_annual_returns
-    })
-    metrics.to_csv('metrics.csv')
-    data.to_csv('data.csv')
+    # --- Results Presentation ---
+    print_asset_statistics(
+        tickers,
+        mean_returns,
+        std_returns,
+        skew_returns,
+        kurt_returns
+    )
+
+    print_portfolio_statistics(
+        portfolio_return,
+        portfolio_volatility,
+        sharpe_ratio,
+        portfolio_var
+    )
+
+    print(f"Risk Analysis:")
+    print(f"  - Diversifiable Risk: {diversifiable_risk:.2%}")
+    print(f"  - Non-Diversifiable Risk: {non_diversifiable_risk:.2%}")
+    print("Note: Values are annualized.")
+
+    # --- Save statistics to CSV ---
+    stats = pd.DataFrame(
+        {
+            "Mean Annual Return": mean_returns,
+            "Annual Volatility": std_returns,
+            "Skewness": skew_returns,
+            "Kurtosis": kurt_returns,
+        }
+    )
+    stats.to_csv("asset_statistics.csv")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
