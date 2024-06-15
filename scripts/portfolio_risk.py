@@ -31,7 +31,7 @@ def remove_sold_assets(df: pd.DataFrame) -> pd.DataFrame:
 
 def download_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
     """Downloads adjusted close prices for a given ticker and date range."""
-    sleep(1)
+    # sleep(1)
     data = yf.download(ticker, start=start_date, end=end_date)["Adj Close"]
     return data
 
@@ -115,7 +115,13 @@ def main():
 
         data = download_data(ticker, start_date, end_date)
         data.name = ticker
-        all_data = pd.merge(all_data, data, left_index=True, right_index=True, how="outer")
+        all_data = pd.merge(
+            all_data,
+            data,
+            left_index=True,
+            right_index=True,
+            how="outer"
+        )
 
     returns = calculate_log_returns(all_data)
     returns.to_csv("data/historical_data.csv")
@@ -162,6 +168,7 @@ def main():
     print("Note: Values are annualized.")
 
     # --- Save statistics to CSV ---
+    # https://www.datacamp.com/tutorial/understanding-skewness-and-kurtosis
     stats = pd.DataFrame({
         "Mean Annual Return": mean_returns,
         "Annual Volatility": std_returns,
