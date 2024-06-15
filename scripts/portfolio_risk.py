@@ -109,7 +109,7 @@ def main():
 
     data = download_data(tickers, start_date, end_date)
     returns = calculate_log_returns(data)
-    data.to_csv("historical_data.csv")
+    data.to_csv("data/historical_data.csv")
 
     mean_returns, std_returns, skew_returns, kurt_returns = calculate_annualized_statistics(
         returns
@@ -158,7 +158,9 @@ def main():
             "Kurtosis": kurt_returns,
         }
     )
-    stats.to_csv("asset_statistics.csv")
+    stats.to_csv(
+        f"data/asset_statistics_{datetime.now().strftime('%Y%m%d-%H%M%S')}.csv"
+    )
 
 
 if __name__ == "__main__":
