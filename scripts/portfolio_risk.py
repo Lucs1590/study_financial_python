@@ -8,6 +8,26 @@ import yfinance as yf
 from scipy.stats import skew, kurtosis
 
 
+def remove_sold_assets(df: pd.DataFrame) -> pd.DataFrame:
+    """Removes assets that have been sold from the portfolio."""
+    sold_df = df[df["buy_sell"] == "Venda"][["ticker", "amount"]] \
+        .groupby("ticker").sum().reset_index()
+    bought_df = df[df["buy_sell"] == "Compra"][["ticker", "amount"]] \
+        .groupby("ticker").sum().reset_index()
+
+    df = df.merge(sold_df, on="ticker", how="left", suffixes=("", "_sold"))
+    df = df.merge(bought_df, on="ticker", how="left", suffixes=("", "_bought"))
+    df["amount_sold"] = df["amount_sold"].fillna(0)
+    df["amount_bought"] = df["amount_bought"].fillna(0)
+    df["amount"] = df["amount_bought"] - df["amount_sold"]
+    df = df.drop(columns=["amount_sold", "amount_bought"])
+    df = df[df["amount"] > 0]
+    df["amount"] = df["amount"].astype(int)
+    df = df.drop(columns=["buy_sell"])
+
+    return df
+
+
 def download_data(tickers: List[str], start_date: str, end_date: datetime) -> pd.DataFrame:
     """Downloads adjusted close prices for the given tickers and date range."""
     data = yf.download(tickers, start=start_date, end=end_date)["Adj Close"]
@@ -72,9 +92,20 @@ def print_portfolio_statistics(
 def main():
     """Main function to calculate and print portfolio risk metrics."""
     # --- Defining parameters and downloading data ---
-    tickers = ["VGIR11.SA", "BTCI11.SA", "RURA11.SA", "MXRF11.SA", "GALG11.SA"]
-    start_date = "2023-06-01"
-    end_date = datetime.now()
+    df_contributions = pd.read_csv("data/contributions.csv")
+    df_contributions["date"] = pd.to_datetime(
+        df_contributions["date"],
+        format="%d/%m/%Y"
+    )
+    df_contributions["ticker"] = df_contributions["ticker"].str.upper().apply(
+        lambda x: f'{x}.SA'
+    )
+
+    start_date = df_contributions["date"].min().strftime("%Y-%m-%d")
+    end_date = df_contributions["date"].max().strftime("%Y-%m-%d")
+
+    df_contributions = remove_sold_assets(df_contributions)
+    tickers = df_contributions["ticker"].unique().tolist()
 
     data = download_data(tickers, start_date, end_date)
     returns = calculate_log_returns(data)
