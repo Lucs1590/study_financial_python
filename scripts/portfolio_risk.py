@@ -70,6 +70,7 @@ def print_portfolio_statistics(
 
 
 def main():
+    """Main function to calculate and print portfolio risk metrics."""
     # --- Defining parameters and downloading data ---
     tickers = ["VGIR11.SA", "BTCI11.SA", "RURA11.SA", "MXRF11.SA", "GALG11.SA"]
     start_date = "2023-06-01"
@@ -112,7 +113,7 @@ def main():
         portfolio_var
     )
 
-    print(f"Risk Analysis:")
+    print("Risk Analysis:")
     print(f"  - Diversifiable Risk: {diversifiable_risk:.2%}")
     print(f"  - Non-Diversifiable Risk: {non_diversifiable_risk:.2%}")
     print("Note: Values are annualized.")
