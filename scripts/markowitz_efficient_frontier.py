@@ -3,8 +3,9 @@ from datetime import datetime
 import yfinance as yf
 import pandas as pd
 import numpy as np
-
 import matplotlib.pyplot as plt
+
+from tqdm import tqdm
 
 
 def remove_sold_assets(dataframe: pd.DataFrame) -> pd.DataFrame:
@@ -54,6 +55,7 @@ def main():
     )
 
     df_contributions = remove_sold_assets(df_contributions)
+    df_contributions = df_contributions[df_contributions["type"] == "Ações"]
     tickers = df_contributions["ticker"].unique().tolist()
 
     all_data = pd.DataFrame()
@@ -81,11 +83,11 @@ def main():
     sharpe_ratios = []
 
     number_stocks = len(tickers)
-    number_wallets = 100_000
+    number_wallets = 500_000
 
     np.random.seed(101)
 
-    for wallet in range(number_wallets):
+    for wallet in tqdm(range(number_wallets)):
         weights = np.random.random(number_stocks)
         weights /= np.sum(weights)
 
@@ -121,7 +123,6 @@ def main():
     wallet_min_variance = df_wallet.loc[df_wallet['Volatility']
                                         == min_volatility]
 
-    plt.style.use('seaborn-dark')
     df_wallet.plot.scatter(x='Volatility', y='Return', c='Sharpe Ratio',
                            cmap='RdYlGn', edgecolors='black', figsize=(10, 8), grid=True)
     plt.scatter(x=wallet_sharpe['Volatility'],
