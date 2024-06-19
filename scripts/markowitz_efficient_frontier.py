@@ -42,9 +42,112 @@ def calculate_log_returns(data: pd.DataFrame) -> pd.DataFrame:
     return np.log(data / data.shift(1))
 
 
+def calculate_portfolio_performance(weights: np.array, daily_returns: pd.DataFrame, daily_covariance: pd.DataFrame) -> tuple:
+    """Calculates portfolio returns, volatility, and Sharpe ratio."""
+    returns = np.dot(weights, daily_returns.mean() * 250)
+    volatility = np.sqrt(
+        np.dot(weights.T, np.dot(daily_covariance * 250, weights))
+    )
+    sharpe_ratio = returns / volatility if volatility != 0 else float("inf")
+    return returns, volatility, sharpe_ratio
+
+
+def generate_portfolios(
+        number_stocks: int,
+        number_wallets: int,
+        daily_returns: pd.DataFrame,
+        daily_covariance: pd.DataFrame,
+        tickers: list
+) -> pd.DataFrame:
+    """Generates random portfolios and calculates their performance."""
+    wallet_returns = []
+    wallet_volatilities = []
+    sharpe_ratios = []
+    stock_weights = []
+
+    print("Generating and analyzing portfolios...")
+    for _ in tqdm(range(number_wallets)):
+        weights = np.random.random(number_stocks)
+        weights /= np.sum(weights)
+
+        returns, volatility, sharpe = calculate_portfolio_performance(
+            weights, daily_returns, daily_covariance
+        )
+
+        wallet_returns.append(returns)
+        wallet_volatilities.append(volatility)
+        sharpe_ratios.append(sharpe)
+        stock_weights.append(weights)
+
+    wallet = {
+        "Return": wallet_returns,
+        "Volatility": wallet_volatilities,
+        "Sharpe Ratio": sharpe_ratios,
+    }
+
+    for count, stock in enumerate(tickers):
+        wallet[stock + " Weight"] = [Weight[count] for Weight in stock_weights]
+
+    df_wallet = pd.DataFrame(wallet)
+    columns = ["Return", "Volatility", "Sharpe Ratio"] + [
+        stock + " Weight" for stock in tickers
+    ]
+    df_wallet = df_wallet[columns]
+
+    return df_wallet
+
+
+def find_optimal_portfolios(df_wallet: pd.DataFrame) -> tuple:
+    """Finds the portfolios with minimum volatility and maximum Sharpe ratio."""
+    min_volatility = df_wallet["Volatility"].min()
+    max_sharpe = df_wallet["Sharpe Ratio"].max()
+
+    wallet_sharpe = df_wallet.loc[df_wallet["Sharpe Ratio"] == max_sharpe]
+    wallet_min_variance = df_wallet.loc[df_wallet["Volatility"]
+                                        == min_volatility]
+
+    return wallet_sharpe, wallet_min_variance
+
+
+def plot_efficient_frontier(df_wallet: pd.DataFrame, optimal_portfolios: tuple) -> None:
+    """Plots the efficient frontier and highlights optimal portfolios."""
+    wallet_sharpe, wallet_min_variance = optimal_portfolios
+
+    plt.figure(figsize=(10, 8))
+    plt.scatter(
+        df_wallet["Volatility"],
+        df_wallet["Return"],
+        c=df_wallet["Sharpe Ratio"],
+        cmap="RdYlGn",
+        edgecolors="black",
+    )
+    plt.scatter(
+        wallet_sharpe["Volatility"],
+        wallet_sharpe["Return"],
+        c="red",
+        marker="o",
+        s=200
+    )
+    plt.scatter(
+        wallet_min_variance["Volatility"],
+        wallet_min_variance["Return"],
+        c="blue",
+        marker="o",
+        s=200,
+    )
+    plt.xlabel("Volatility (Annualized)")
+    plt.ylabel("Expected Return (Annualized)")
+    plt.title("Markowitz Efficient Frontier")
+    plt.colorbar(label="Sharpe Ratio")
+    plt.grid(True)
+    plt.show()
+
+    print("Minimum Variance Portfolio:\n", wallet_min_variance.T)
+    print("\nMaximum Sharpe Ratio Portfolio:\n", wallet_sharpe.T)
+
+
 def main():
     """Main function to calculate and print portfolio risk metrics."""
-    # --- Defining parameters and downloading data ---
     df_contributions = pd.read_csv("data/contributions.csv")
     df_contributions["date"] = pd.to_datetime(
         df_contributions["date"],
@@ -55,7 +158,9 @@ def main():
     )
 
     df_contributions = remove_sold_assets(df_contributions)
-    df_contributions = df_contributions[df_contributions["type"] == "Ações"]
+    df_contributions = df_contributions[
+        df_contributions["type"] == "A\u00e7\u00f5es"
+    ]
     tickers = df_contributions["ticker"].unique().tolist()
 
     all_data = pd.DataFrame()
@@ -77,68 +182,15 @@ def main():
 
     daily_returns = calculate_log_returns(all_data)
     daily_covariance = daily_returns.cov()
-    wallet_returns = []
-    stock_weights = []
-    wallet_volatilities = []
-    sharpe_ratios = []
 
     number_stocks = len(tickers)
-    number_wallets = 500_000
+    number_wallets = 100_000
 
-    np.random.seed(101)
-
-    for wallet in tqdm(range(number_wallets)):
-        weights = np.random.random(number_stocks)
-        weights /= np.sum(weights)
-
-        returns = np.dot(weights, daily_returns.mean() * 250)
-
-        volatility = np.sqrt(
-            np.dot(weights.T, np.dot(daily_covariance * 250, weights)))
-
-        sharpe = returns / volatility
-
-        sharpe_ratios.append(sharpe)
-        wallet_returns.append(returns)
-        wallet_volatilities.append(volatility)
-        stock_weights.append(weights)
-
-    wallet = {'Return': wallet_returns,
-              'Volatility': wallet_volatilities,
-              'Sharpe Ratio': sharpe_ratios}
-
-    for count, stock in enumerate(tickers):
-        wallet[stock+' Weight'] = [Weight[count] for Weight in stock_weights]
-
-    df_wallet = pd.DataFrame(wallet)
-
-    columns = ['Return', 'Volatility', 'Sharpe Ratio'] + \
-        [stock+' Weight' for stock in tickers]
-
-    df_wallet = df_wallet[columns]
-    min_volatility = df_wallet['Volatility'].min()
-    max_sharpe = df_wallet['Sharpe Ratio'].max()
-
-    wallet_sharpe = df_wallet.loc[df_wallet['Sharpe Ratio'] == max_sharpe]
-    wallet_min_variance = df_wallet.loc[df_wallet['Volatility']
-                                        == min_volatility]
-
-    df_wallet.plot.scatter(x='Volatility', y='Return', c='Sharpe Ratio',
-                           cmap='RdYlGn', edgecolors='black', figsize=(10, 8), grid=True)
-    plt.scatter(x=wallet_sharpe['Volatility'],
-                y=wallet_sharpe['Return'], c='red', marker='o', s=200)
-    plt.scatter(x=wallet_min_variance['Volatility'],
-                y=wallet_min_variance['Return'], c='blue', marker='o', s=200)
-    plt.xlabel('Volatility')
-    plt.ylabel('Expected Return')
-    plt.title('Markowitz Efficient Frontier')
-    plt.savefig(
-        f"images/markowitz_efficient_frontier{datetime.now().strftime('%Y%m%d-%H%M')}.png"
+    df_wallet = generate_portfolios(
+        number_stocks, number_wallets, daily_returns, daily_covariance, tickers
     )
-
-    print("This is the Minimum Variance Portfolio:", '\n', wallet_min_variance.T)
-    print('\n')
-    print("This is the Maximum Sharpe Ratio Portfolio:", '\n', wallet_sharpe.T)
+    optimal_portfolios = find_optimal_portfolios(df_wallet)
+    plot_efficient_frontier(df_wallet, optimal_portfolios)
 
 
 if __name__ == "__main__":
