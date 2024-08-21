@@ -6,6 +6,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from tqdm import tqdm
+from multiprocessing import Pool, cpu_count
+
+CPU_COUNT = max(1, cpu_count() - 1)
 
 
 def remove_sold_assets(dataframe: pd.DataFrame) -> pd.DataFrame:
@@ -32,7 +35,6 @@ def remove_sold_assets(dataframe: pd.DataFrame) -> pd.DataFrame:
 
 def download_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
     """Downloads adjusted close prices for a given ticker and date range."""
-    # sleep(1)
     data = yf.download(ticker, start=start_date, end=end_date)["Adj Close"]
     return data
 
@@ -52,6 +54,12 @@ def calculate_portfolio_performance(weights: np.array, daily_returns: pd.DataFra
     return returns, volatility, sharpe_ratio
 
 
+def analyze_portfolio(args):
+    """Helper function to analyze a single portfolio."""
+    weights, daily_returns, daily_covariance = args
+    return calculate_portfolio_performance(weights, daily_returns, daily_covariance)
+
+
 def generate_portfolios(
         number_stocks: int,
         number_wallets: int,
@@ -60,24 +68,23 @@ def generate_portfolios(
         tickers: list
 ) -> pd.DataFrame:
     """Generates random portfolios and calculates their performance."""
-    wallet_returns = []
-    wallet_volatilities = []
-    sharpe_ratios = []
-    stock_weights = []
+    stock_weights = [np.random.random(number_stocks)
+                     for _ in range(number_wallets)]
+    stock_weights = [weights / np.sum(weights) for weights in stock_weights]
 
     print("Generating and analyzing portfolios...")
-    for _ in tqdm(range(number_wallets)):
-        weights = np.random.random(number_stocks)
-        weights /= np.sum(weights)
 
-        returns, volatility, sharpe = calculate_portfolio_performance(
-            weights, daily_returns, daily_covariance
+    # Using multiprocessing to parallelize the portfolio analysis
+    with Pool(CPU_COUNT) as pool:
+        results = list(
+            tqdm(pool.imap(
+                analyze_portfolio,
+                [(weights, daily_returns, daily_covariance)
+                 for weights in stock_weights]
+            ), total=number_wallets)
         )
 
-        wallet_returns.append(returns)
-        wallet_volatilities.append(volatility)
-        sharpe_ratios.append(sharpe)
-        stock_weights.append(weights)
+    wallet_returns, wallet_volatilities, sharpe_ratios = zip(*results)
 
     wallet = {
         "Return": wallet_returns,
@@ -86,7 +93,10 @@ def generate_portfolios(
     }
 
     for count, stock in enumerate(tickers):
-        wallet[stock + " Weight"] = [Weight[count] for Weight in stock_weights]
+        wallet[stock + " Weight"] = [
+            weights[count]
+            for weights in stock_weights
+        ]
 
     df_wallet = pd.DataFrame(wallet)
     columns = ["Return", "Volatility", "Sharpe Ratio"] + [
